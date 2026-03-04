@@ -1,6 +1,8 @@
 // Some options
 (
-~constantTone = false;    // use envelope, if false then constant oscillation (e.g. for modular)
+~constantTone = true;    // use envelope, if false then constant oscillation (e.g. for modular)
+~modulo2 = false;
+~oneOctave = false;
 
 s.boot;
 
@@ -12,20 +14,25 @@ FreqScope.new(400, 200, 0, server: s);
 o = Server.default.options;
 
 )
+~modulo2 = false;
+~oneOctave = false;
 
 // for 4 channels ========================================================================
-/*(
+(
 o.numOutputBusChannels_(4); // for Scarlett
 
 // Execute this line after changing number of channels
 Server.default.reboot;
-)*/
+)
 
 
 o.numOutputBusChannels.postln;
 
 // If the above worked, then outputs will appear in meter
 s.meter;
+
+s.quit;  // to quit the server
+
 
 //====================================================================================================
 // Set up the midi, to send note-on & note-off to the Arturia Keystep, to get gate with modular
@@ -45,7 +52,7 @@ m = MIDIOut(0);
 // Read the files for tiling and computer frequencies on dual graph
 (
 // Set the file directory
-~dir = "/Users/abeaudoi/sw/git_repos/JI_tiling/Data/";
+~dir = thisProcess.nowExecutingPath.dirname +/+ "Data/";
 
 ~indices = CSVFileReader.readInterpret(~dir ++ "indices_5Dprojection.txt").postcs;
 ~verts = CSVFileReader.readInterpret(~dir ++ "verts_5Dprojection.txt").postcs;
@@ -117,14 +124,16 @@ to indicate an undertone.  There is logic to convert to fractions and place in t
 The reason for the strings is to make a clear presentation of the current choice of intervals
 in the button (used to select different lattice parameter choices).
 */
-
 (
 ~freqScale = {
 	arg cell,node;
-	var f = 1.0;
+	var f = 1.0, p;
 	for(0, 4, {arg i;
-		f = f * (~intervals[i]**~indices[cell][(node*5)+i]);
-
+		if (~modulo2,
+			{ p = ((~indices[cell][(node*5)+i])%2)*sign(~indices[cell][(node*5)+i]);},
+			{ p = ~indices[cell][(node*5)+i];}
+		);
+		f = f * (~intervals[i]**p);
 	});
 	f;
 };
@@ -354,6 +363,38 @@ SynthDef(\harmonicSynth, {
     Out.ar(out, sig ! 2); // Stereo output
 }).add;
 
+SynthDef(\triangle, {
+	arg out=0, freq = 300, amp = 0.3, attack = 0.1, sustain = 0.5, release = 1.5;
+	var numHarmonics = 30;
+	var sig = 0, env;
+
+	env = Env.linen(attack, sustain, release, amp, \welch).kr(doneAction: Done.freeSelf);
+
+	for(1, numHarmonics, {
+		|i|
+		var n = 2 * i - 1; // Create the harmonic number
+		var phase = if(i % 2 == 0, {0}, {pi}); // Alternate phase - a conditional is an expression
+		sig = sig + SinOsc.ar(freq * n, phase, amp * (1/n.squared));
+
+	});
+	sig = sig * env;
+	Out.ar(out, sig); // ! 2); // Stereo output
+}).add;
+
+SynthDef(\triangleConstant, {
+	arg amp = 0.5, freq = 220, out = 0;
+	var numHarmonics = 30, ampScale=0.05;
+	var sig = 0;
+
+		for(1, numHarmonics, {
+		|i|
+		var n = 2 * i - 1; // Create the harmonic number
+		var phase = if(i % 2 == 0, {0}, {pi}); // Alternate phase - a conditional is an expression
+		sig = sig + SinOsc.ar(freq * n, phase, ampScale * amp * (1/n.squared));
+
+		Out.ar(out, amp*sig);
+	});
+}).add;
 )
 
 //====================================================================================================
@@ -373,7 +414,7 @@ for (0,3,
 		if (o.numOutputBusChannels>2,{op=i;ap=0.1},{op=i%2;ap=0.15});
 		if (~constantTone,
 			{
-				~toneArray[i] = Synth.new(\toneConstant, ["freq", ~baseFreq, "out", op, "amp", ap ]);
+				~toneArray[i] = Synth.new(\triangleConstant, ["freq", ~baseFreq, "out", op, "amp", ap ]);
 			}
 		);
 	}
@@ -499,18 +540,18 @@ v.mouseDownAction_(
 						var frq, id;
 
 						frq = ~freqScale.value(s,i);
-						frq = ~singleOctave.value(frq);
+						if (~oneOctave, {frq = ~singleOctave.value(frq)});
 						ratios[i] = frq;
 						notes[i] = noteNames[ round(12*log2(~singleOctave.value(frq))).asInteger ];
 						frq = ~baseFreq*frq;
 
 						if (~constantTone,
 							{
-								~toneArray[i].set(\freq, frq, \amp, amps[i]*~ampRef);  // for modular
+								~toneArray[i].set(\freq, frq, \amp, sqrt(amps[i]*~ampRef));  // for modular
 							},
 							{
 								//Synth(\tone, ["freq", frq, "out", i%o.numOutputBusChannels, "amp", amps[i]*~ampRef ] );
-								Synth(\harmonicSynth, ["freq", frq, "out", i%o.numOutputBusChannels, "amp", amps[i]*~ampRef ] );
+								Synth(\triangle, ["freq", frq, "out", i%o.numOutputBusChannels, "amp", amps[i]*~ampRef ] );
 							}
 						);
 					}
@@ -558,3 +599,7 @@ for (0,3,
 	}
 );
 )
+
+
+round(12*log2(1.25)).asInteger
+Array.with('C','C#','D','D#','E','F','F#','G','G#','A','A#','B','C')[round(12*log2(1.125)).asInteger]
