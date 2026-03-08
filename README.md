@@ -32,7 +32,6 @@ Recommended order:
 | `notebooks/penrose5D.ipynb` | Core notebook. Builds the 5D rotation, selects lattice points via convex-hull cut window, constructs the Penrose tiling, and writes the `Data/` files consumed by SuperCollider. |
 | `notebooks/hexadicDiamond.ipynb` | Derives Erv Wilson's Hexadic Diamond from the same 5D projection, annotating projected points with their JI pitch ratios. |
 | `notebooks/HypercubeOnPlane.ipynb` | Symbolic derivation of the eigenvectors using SymPy; verifies the projection geometry. |
-| `notebooks/sethares.ipynb` | Implements the Plomp–Levelt psychoacoustic roughness model (following Sethares) to explore consonance across the JI pitch set. |
 
 ## Data pipeline
 

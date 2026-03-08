@@ -324,9 +324,10 @@ SynthDef(\toneConstant, {
 	var snd;
 
 	// Create three harmonics (fundamental + 2 overtones)
-    snd = SinOsc.ar(freq, 0, amp * 0.5) +      // Fundamental
+/*    snd = SinOsc.ar(freq, 0, amp * 0.5) +      // Fundamental
           SinOsc.ar(freq * 2, 0, amp * 0.25) +  // 2nd harmonic
-          SinOsc.ar(freq * 3, 0, amp * 0.125);  // 3rd harmonic
+          SinOsc.ar(freq * 3, 0, amp * 0.125);  // 3rd harmonic*/
+	snd = SinOsc.ar(freq, 0, amp) ;
 	Out.ar(out, amp*snd);
 }).add;
 
@@ -414,7 +415,7 @@ for (0,3,
 		if (o.numOutputBusChannels>2,{op=i;ap=0.1},{op=i%2;ap=0.15});
 		if (~constantTone,
 			{
-				~toneArray[i] = Synth.new(\triangleConstant, ["freq", ~baseFreq, "out", op, "amp", ap ]);
+				~toneArray[i] = Synth.new(\toneConstant, ["freq", ~baseFreq, "out", op, "amp", ap ]);
 			}
 		);
 	}
@@ -429,7 +430,7 @@ for (0,3,
 // vertex coordinates, it is necessary to re-read the file.
 
 (
-~ampRef = 0.8;
+~ampRef = 0.9;
 
 w = Window.new("Penrose", Rect(600, 100, 600, 600)).front;
 w.view.background_(Color.white);
@@ -603,3 +604,5 @@ for (0,3,
 
 round(12*log2(1.25)).asInteger
 Array.with('C','C#','D','D#','E','F','F#','G','G#','A','A#','B','C')[round(12*log2(1.125)).asInteger]
+
+s.scope
