@@ -4,12 +4,13 @@ There are several blocks to run in order:
    1. Options
    2. Global variables & functions (data, JI, geometry)
    3. Boot the server
-   4. Synth definitions
-   5. OSC initialization
-   6. MIDI initialization (not currently used)
-   7. Start synth instances
-   8. Create window
-   9. Clean up
+   4. Audio buses (vocoder mode only)
+   5. Synth definitions
+   6. OSC initialization
+   7. MIDI initialization (not currently used)
+   8. Start synth instances
+   9. Create window
+  10. Clean up
 */
 
 //====================================================================================================
@@ -19,6 +20,7 @@ There are several blocks to run in order:
 //~constantTone = true;    // use envelope, if false then constant oscillation (e.g. for modular)
 ~baseFreq = 261.63;        // reference frequency for unity
 ~constantTone = false;     // constant tone, for use with vocoder
+~vocoderMode = false;      // true = software vocoder (requires ~constantTone = true)
 ~modulo2 = false;
 ~oneOctave = false;
 )
@@ -315,10 +317,58 @@ s.meter;
 s.quit;  // to quit the server
 
 //====================================================================================================
+// Audio buses and node groups — evaluate only when ~vocoderMode = true
+(
+if (~vocoderMode) {
+	~modBus     = Bus.audio(s, 1);
+	~carrierBus = Array.fill(4, { Bus.audio(s, 1) });
+	~srcGroup     = Group.new(s, \addToHead);
+	~vocoderGroup = Group.after(~srcGroup);
+};
+)
+
+//====================================================================================================
 // Synth definitions
 //====================================================================================================
-//a simple sine wave with envelope
 (
+// Vocoder SynthDefs — only needed when ~vocoderMode = true
+if (~vocoderMode) {
+
+	// Shared modulator — live mic input written to ~modBus
+	SynthDef(\modulator, {
+		arg out = 0, amp = 1.0;
+		Out.ar(out, SoundIn.ar(0) * amp);
+	}).add;
+
+	// Carrier oscillator — triangle at JI frequency, written to ~carrierBus[i]
+	SynthDef(\carrierVocode, {
+		arg out = 0, freq = 220, amp = 0.5;
+		Out.ar(out, LFTri.ar(freq, 0, amp));
+	}).add;
+
+	// 16-band channel vocoder: analyzes mic (~modBus), imposes spectral envelope onto carrier (~carrierBus[i])
+	SynthDef(\vocoderUnit, {
+		arg modBus = 0, carrierBus = 1, out = 0, amp = 0.1;
+		var mod, carrier, sig;
+		var numBands = 16;
+		var freqs = Array.geom(numBands, 100, 80 ** (1/15));  // 100 Hz to ~8000 Hz
+
+		mod     = In.ar(modBus);
+		carrier = In.ar(carrierBus);
+
+		sig = Mix.fill(numBands, { |k|
+			var modBand, carrierBand, env;
+			modBand     = BPF.ar(mod,     freqs[k], 0.3);
+			carrierBand = BPF.ar(carrier, freqs[k], 0.3);
+			env = Amplitude.ar(modBand, attackTime: 0.01, releaseTime: 0.1);
+			carrierBand * env;
+		});
+
+		Out.ar(out, sig * amp);
+	}).add;
+};
+
+//a simple sine wave with envelope
 SynthDef(\tone, {arg amp = 0.05, freq = 220, out = 0,
 	attack = 0.1, sustain = 0.5, release = 1.5;
 var env, snd;
@@ -424,7 +474,11 @@ SynthDef(\triangleConstant, {
 
 				frq = ~freqScale.value(tile,i);
 				frq = ~baseFreq*frq;
-				Synth(\triangle, ["freq", frq, "out", i%o.numOutputBusChannels, "amp", amp ] );
+				if (~vocoderMode) {
+					~toneArray[i].set(\freq, frq);  // update carrier; amp unchanged (no click position)
+				} {
+					Synth(\triangle, ["freq", frq, "out", i%o.numOutputBusChannels, "amp", amp ] );
+				};
 			}
 		);
 	},
@@ -473,8 +527,28 @@ m = MIDIOut(0);
 (
 ~toneArray = Array.newClear(4);
 
-for (0,3,
-	{
+if (~vocoderMode) {
+	// Software vocoder: modulator (mic), carriers, and vocoder units
+	~modSynth = Synth(\modulator, [\out, ~modBus], ~srcGroup);
+
+	for (0, 3, { |i|
+		~toneArray[i] = Synth(\carrierVocode, [\freq, ~baseFreq, \out, ~carrierBus[i]], ~srcGroup);
+	});
+
+	~vocoderArray = Array.newClear(4);
+	for (0, 3, { |i|
+		var op;
+		op = if (o.numOutputBusChannels > 2, { i }, { i % 2 });
+		~vocoderArray[i] = Synth(\vocoderUnit, [
+			\modBus,     ~modBus.index,
+			\carrierBus, ~carrierBus[i].index,
+			\out,        op,
+			\amp,        0.1
+		], ~vocoderGroup);
+	});
+} {
+	// Standard / hardware-vocoder startup
+	for (0, 3, {
 		arg i;
 		var ap, op;
 
@@ -484,8 +558,8 @@ for (0,3,
 				~toneArray[i] = Synth.new(\toneConstant, ["freq", ~baseFreq, "out", op, "amp", ap ]);
 			}
 		);
-	}
-);
+	});
+};
 )
 
 //====================================================================================================
@@ -611,15 +685,19 @@ v.mouseDownAction_(
 						notes[i] = noteNames[ round(12*log2(~singleOctave.value(frq))).asInteger ];
 						frq = ~baseFreq*frq;
 
-						if (~constantTone,
-							{
-								~toneArray[i].set(\freq, frq, \amp, sqrt(amps[i]*~ampRef));  // for modular
-							},
-							{
-								//Synth(\tone, ["freq", frq, "out", i%o.numOutputBusChannels, "amp", amps[i]*~ampRef ] );
-								Synth(\triangle, ["freq", frq, "out", i%o.numOutputBusChannels, "amp", amps[i]*~ampRef ] );
-							}
-						);
+						if (~vocoderMode) {
+							~toneArray[i].set(\freq, frq);
+							~vocoderArray[i].set(\amp, sqrt(amps[i] * ~ampRef) * 0.15);
+						} {
+							if (~constantTone,
+								{
+									~toneArray[i].set(\freq, frq, \amp, sqrt(amps[i]*~ampRef));  // for modular
+								},
+								{
+									Synth(\triangle, ["freq", frq, "out", i%o.numOutputBusChannels, "amp", amps[i]*~ampRef ] );
+								}
+							);
+						};
 					}
 				);
 				id = ratios.order;
@@ -657,11 +735,12 @@ w.close;
 )
 
 (
-for (0,3,
-	{
-		arg i;
-
-		~toneArray[i].free;
-	}
-);
+if (~vocoderMode) {
+	~modSynth.free;
+	~vocoderArray.do(_.free);
+	~toneArray.do(_.free);
+	// To also free buses: ~modBus.free; ~carrierBus.do(_.free);
+} {
+	~toneArray.do(_.free);
+};
 )
