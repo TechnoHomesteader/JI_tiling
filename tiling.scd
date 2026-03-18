@@ -1,6 +1,7 @@
 // Some options
 (
-~constantTone = true;    // use envelope, if false then constant oscillation (e.g. for modular)
+//~constantTone = true;    // use envelope, if false then constant oscillation (e.g. for modular)
+~constantTone = false;
 ~modulo2 = false;
 ~oneOctave = false;
 
@@ -47,6 +48,50 @@ MIDIClient.destinations;
 // This works for use with midi cable from the Scarlett to Keystep
 m = MIDIOut(0);
 */
+
+//====================================================================================================
+// OSC
+// OSCFunc.trace(false);
+
+// this example is basically like OSCFunc.trace but filters out
+// /status.reply messages
+(
+f = { |msg, time, addr, recvPort|
+	if (msg[0] != '/status.reply') {
+        "time: % sender: % recvPort: %\n  message: %\n".postf(time, addr, recvPort, msg);
+    }
+};
+thisProcess.addOSCRecvFunc(f);
+)
+
+
+// stop posting.
+thisProcess.removeOSCRecvFunc(f);
+
+(
+~tileTones = OSCFunc(
+	{
+		arg msg, time, addr, recvPort;
+		var tile, amp=0.7;
+
+		tile = msg[1].asInteger - 1;
+		~freqScale.value(tile,0).postln;
+
+		for(0,3,
+			{
+				arg i;
+				var frq, id;
+
+				frq = ~freqScale.value(tile,i);
+				frq = ~baseFreq*frq;
+				Synth(\triangle, ["freq", frq, "out", i%o.numOutputBusChannels, "amp", amp ] );
+			}
+		);
+	},
+	'/Tile');
+)
+
+~tileTones.free;
 
 //====================================================================================================
 // Read the files for tiling and computer frequencies on dual graph
@@ -188,7 +233,6 @@ in the button (used to select different lattice parameter choices).
 // Locate the tile containing the coordinate selected through use of cross product.
 // From
 // https://stackoverflow.com/questions/1119627/how-to-test-if-a-point-is-inside-of-a-convex-polygon-in-2d-integer-coordinates
-
 (
 ~cosine_sign = {
 	arg a, b;
@@ -245,6 +289,9 @@ in the button (used to select different lattice parameter choices).
 	};
 };
 )
+
+//====================================================================================================
+// Interpolation
 /*
 Routine to develop relative amplitudes based on position selected within the tile.
 
@@ -507,6 +554,8 @@ v.mouseDownAction_(
 		var notes, noteNames, ratios, id, amps=[0.25,0.25,0.25,0.25];
 
 		x = ax; y = ay;
+
+		// DO NOT RE-DEFINE s HERE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! CHANGE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		s = -1;
 		notes = Array.newClear(4);
 		ratios = Array.newClear(4);
