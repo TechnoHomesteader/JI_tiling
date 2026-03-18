@@ -1,101 +1,32 @@
-// Some options
-(
-//~constantTone = true;    // use envelope, if false then constant oscillation (e.g. for modular)
-~constantTone = false;
-~modulo2 = false;
-~oneOctave = false;
-
-s.boot;
-
-s.plotTree;
-
-// create a new analyzer
-FreqScope.new(400, 200, 0, server: s);
-
-o = Server.default.options;
-
-)
-~modulo2 = false;
-~oneOctave = false;
-
-// for 4 channels ========================================================================
-(
-o.numOutputBusChannels_(4); // for Scarlett
-
-// Execute this line after changing number of channels
-Server.default.reboot;
-)
-
-
-o.numOutputBusChannels.postln;
-
-// If the above worked, then outputs will appear in meter
-s.meter;
-
-s.quit;  // to quit the server
-
-
-//====================================================================================================
-// Set up the midi, to send note-on & note-off to the Arturia Keystep, to get gate with modular
 /*
-MIDIClient.init;
+There are several blocks to run in order:
 
-MIDIClient.destinations;
-
-// Needed something like this when connecting to the Keystep through USB
-// m = MIDIOut(0,MIDIClient.destinations[1].uid);
-
-// This works for use with midi cable from the Scarlett to Keystep
-m = MIDIOut(0);
+   1. Options
+   2. Global variables & functions (data, JI, geometry)
+   3. Boot the server
+   4. Synth definitions
+   5. OSC initialization
+   6. MIDI initialization (not currently used)
+   7. Start synth instances
+   8. Create window
+   9. Clean up
 */
 
 //====================================================================================================
-// OSC
-// OSCFunc.trace(false);
-
-// this example is basically like OSCFunc.trace but filters out
-// /status.reply messages
-(
-f = { |msg, time, addr, recvPort|
-	if (msg[0] != '/status.reply') {
-        "time: % sender: % recvPort: %\n  message: %\n".postf(time, addr, recvPort, msg);
-    }
-};
-thisProcess.addOSCRecvFunc(f);
-)
-
-
-// stop posting.
-thisProcess.removeOSCRecvFunc(f);
-
-(
-~tileTones = OSCFunc(
-	{
-		arg msg, time, addr, recvPort;
-		var tile, amp=0.7;
-
-		tile = msg[1].asInteger - 1;
-		~freqScale.value(tile,0).postln;
-
-		for(0,3,
-			{
-				arg i;
-				var frq, id;
-
-				frq = ~freqScale.value(tile,i);
-				frq = ~baseFreq*frq;
-				Synth(\triangle, ["freq", frq, "out", i%o.numOutputBusChannels, "amp", amp ] );
-			}
-		);
-	},
-	'/Tile');
-)
-
-~tileTones.free;
-
+// OPTIONS
 //====================================================================================================
-// Read the files for tiling and computer frequencies on dual graph
 (
+//~constantTone = true;    // use envelope, if false then constant oscillation (e.g. for modular)
+~baseFreq = 261.63;        // reference frequency for unity
+~constantTone = false;     // constant tone, for use with vocoder
+~modulo2 = false;
+~oneOctave = false;
+)
+
+// GLOBAL VARIABLES & FUNCTIONS
+//====================================================================================================
+(
+// Read the files for tiling and computer frequencies on dual graph
 // Set the file directory
 ~dir = thisProcess.nowExecutingPath.dirname +/+ "Data/";
 
@@ -156,10 +87,8 @@ thisProcess.removeOSCRecvFunc(f);
 
 // The next line OVERWRITES the lattice with translated & scaled lattice for plotting
 ~lattice_scale.value(~lim,[600,600],~verts);
-)
 
-//====================================================================================================
-// Frequency (ratios)
+// FREQUENCIES (ratios)
 /*
 Set up the just intonation intervals for the 5D lattice.  The lattice is really a hyperplane in
 4D, so use the ratio of 2 to eliminate one of the dimensions.
@@ -169,7 +98,7 @@ to indicate an undertone.  There is logic to convert to fractions and place in t
 The reason for the strings is to make a clear presentation of the current choice of intervals
 in the button (used to select different lattice parameter choices).
 */
-(
+
 ~freqScale = {
 	arg cell,node;
 	var f = 1.0, p;
@@ -225,15 +154,15 @@ in the button (used to select different lattice parameter choices).
 
 ~currentInterval = 0;
 ~intervals = ~latticeIntervals[~currentInterval];  // Initialize with 1st set of lattice parameters
-)
 
-//====================================================================================================
-// Identify the tile, and set relative amplitudes based on position selected within the tile
-//
-// Locate the tile containing the coordinate selected through use of cross product.
-// From
-// https://stackoverflow.com/questions/1119627/how-to-test-if-a-point-is-inside-of-a-convex-polygon-in-2d-integer-coordinates
-(
+// IDENTIFY TILE
+/*
+Identify the tile, and set relative amplitudes based on position selected within the tile
+
+Locate the tile containing the coordinate selected through use of cross product. From
+https://stackoverflow.com/questions/1119627/how-to-test-if-a-point-is-inside-of-a-convex-polygon-in-2d-integer-coordinates
+*/
+
 ~cosine_sign = {
 	arg a, b;
 	var c;
@@ -288,10 +217,8 @@ in the button (used to select different lattice parameter choices).
 		break.value(true);
 	};
 };
-)
 
-//====================================================================================================
-// Interpolation
+// INTERPOLATION
 /*
 Routine to develop relative amplitudes based on position selected within the tile.
 
@@ -312,7 +239,7 @@ So, a "Newton's method" is employed,requiring a single interation ("linear" syst
 Note that, as the tiles appear to be parallelograms, it may be possible to use an
 esplicit solution given in the link above -- for this specific case.
 */
-(
+
 ~ampScale = {
 	arg v, x, y;
 
@@ -348,15 +275,48 @@ esplicit solution given in the link above -- for this specific case.
 
 	s = s - ((jInv[0][0]*f1)+(jInv[0][1]*f2));
 	t = t - ((jInv[1][0]*f1)+(jInv[1][1]*f2));
-	[s,t].postln;
 
 	[ ((1-s)*(1-t))/4, ((1+s)*(1-t))/4, ((1+s)*(1+t))/4, ((1-s)*(1+t))/4 ];
 };
 )
 
 //====================================================================================================
-// Synth definitions
+// BOOT THE SERVER
+//====================================================================================================
+/*
+This is coded in an interactive fashion, because of the different types of equipment that may
+be used.
+*/
+(
+s.boot;
 
+s.plotTree;
+
+// create a new analyzer
+FreqScope.new(400, 200, 0, server: s);
+
+o = Server.default.options;
+
+)
+
+// for 4 channels
+(
+o.numOutputBusChannels_(4); // for Scarlett
+
+// Execute this line after changing number of channels
+Server.default.reboot;
+)
+
+o.numOutputBusChannels.postln;
+
+// If the above worked, then outputs will appear in meter
+s.meter;
+
+s.quit;  // to quit the server
+
+//====================================================================================================
+// Synth definitions
+//====================================================================================================
 //a simple sine wave with envelope
 (
 SynthDef(\tone, {arg amp = 0.05, freq = 220, out = 0,
@@ -447,13 +407,71 @@ SynthDef(\triangleConstant, {
 )
 
 //====================================================================================================
+// OSC
+//====================================================================================================
+(
+~tileTones = OSCFunc(
+	{
+		arg msg, time, addr, recvPort;
+		var tile, amp=0.25;
+
+		tile = msg[1].asInteger - 1;
+
+		for(0,3,
+			{
+				arg i;
+				var frq;
+
+				frq = ~freqScale.value(tile,i);
+				frq = ~baseFreq*frq;
+				Synth(\triangle, ["freq", frq, "out", i%o.numOutputBusChannels, "amp", amp ] );
+			}
+		);
+	},
+	'/Tile');
+)
+
+// Free the OSC function
+~tileTones.free;
+
+// Some code for debugging the OSC connection
+
+// OSCFunc.trace(true);
+// OSCFunc.trace(false);
+// basically like OSCFunc.trace but filters out /status.reply messages
+
+(
+f = { |msg, time, addr, recvPort|
+	if (msg[0] != '/status.reply') {
+        "time: % sender: % recvPort: %\n  message: %\n".postf(time, addr, recvPort, msg);
+    }
+};
+thisProcess.addOSCRecvFunc(f);
+)
+
+// stop posting.
+thisProcess.removeOSCRecvFunc(f);
+
+//====================================================================================================
+// Set up the midi, to send note-on & note-off to the Arturia Keystep, to get gate with modular
+/*
+MIDIClient.init;
+
+MIDIClient.destinations;
+
+// Needed something like this when connecting to the Keystep through USB
+// m = MIDIOut(0,MIDIClient.destinations[1].uid);
+
+// This works for use with midi cable from the Scarlett to Keystep
+m = MIDIOut(0);
+*/
+
+//====================================================================================================
 // Start up the synths
+//====================================================================================================
 //  Sets the reference base frequency.  Loads up an array of oscillators the will be used
-//  if constantTone is .
 (
 ~toneArray = Array.newClear(4);
-
-~baseFreq = 261.63;
 
 for (0,3,
 	{
@@ -468,15 +486,15 @@ for (0,3,
 		);
 	}
 );
-
 )
 
 //====================================================================================================
 // Create window and draw the tiling
-//
-// As it currently stands, the vertices are scaled to the window.  To recover the original
-// vertex coordinates, it is necessary to re-read the file.
-
+//====================================================================================================
+/*
+As it currently stands, the vertices are scaled to the window.  To recover the original
+vertex coordinates, it is necessary to re-read the file.
+*/
 (
 ~ampRef = 0.9;
 
@@ -520,7 +538,6 @@ clrs = ['grey','limegreen','darkorange','grey','darkgrey','violet','deepskyblue'
 			var s;
 
 			s = (sqrt(squared(~verts[i][6]-~verts[i][0])+squared(~verts[i][7]-~verts[i][1])) * sqrt(squared(~verts[i][4]-~verts[i][2])+squared(~verts[i][5]-~verts[i][3])))/2;
-			[i,s].postln;
 			// Next line needs to be generalized, instead of hard-code s>
 			// if (s>1400, {Pen.fillColor = Color.red(0.8, 0.5);}, {Pen.fillColor = Color.cyan(0.5, 0.5);});
 			Pen.fillColor = clrs[~faces[i][0]];
@@ -571,9 +588,7 @@ v.mouseDownAction_(
 					if (~inside_convex_polygon.value([x,y],vs),
 						{
 							s=i;
-							~indices[s].postln;
 							amps = ~ampScale.value(~verts[s],x,y);
-							amps.postln;
 							break.value(true)
 						}
 					);
@@ -650,9 +665,3 @@ for (0,3,
 	}
 );
 )
-
-
-round(12*log2(1.25)).asInteger
-Array.with('C','C#','D','D#','E','F','F#','G','G#','A','A#','B','C')[round(12*log2(1.125)).asInteger]
-
-s.scope
