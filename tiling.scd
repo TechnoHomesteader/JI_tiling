@@ -17,14 +17,14 @@ There are several blocks to run in order:
 // OPTIONS
 //====================================================================================================
 (
-//~constantTone = true;    // use envelope, if false then constant oscillation (e.g. for modular)
 ~baseFreq = 261.63;        // reference frequency for unity
-~constantTone = false;     // constant tone, for use with vocoder
-~vocoderMode = false;      // true = software vocoder (requires ~constantTone = true)
+~constantTone = true;     // constant tone, for use with vocoder
+~vocoderMode = true;      // true = software vocoder (requires ~constantTone = true)
 ~modulo2 = false;
 ~oneOctave = false;
 )
 
+//====================================================================================================
 // GLOBAL VARIABLES & FUNCTIONS
 //====================================================================================================
 (
@@ -318,6 +318,7 @@ s.quit;  // to quit the server
 
 //====================================================================================================
 // Audio buses and node groups — evaluate only when ~vocoderMode = true
+//====================================================================================================
 (
 if (~vocoderMode) {
 	~modBus     = Bus.audio(s, 1);
@@ -508,6 +509,7 @@ thisProcess.removeOSCRecvFunc(f);
 
 //====================================================================================================
 // Set up the midi, to send note-on & note-off to the Arturia Keystep, to get gate with modular
+//====================================================================================================
 /*
 MIDIClient.init;
 
