@@ -299,7 +299,7 @@ esplicit solution given in the link above -- for this specific case.
 
 		if (~vocoderMode) {
 			~toneArray[i].set(\freq, frq);
-			~vocoderArray[i].set(\amp, sqrt(amps[i] * ~ampRef) * 0.15);
+			~vocoderArray[i].set(\amp, sqrt(amps[i] * ~ampRef));
 		} {
 			if (~constantTone,
 				{ ~toneArray[i].set(\freq, frq, \amp, sqrt(amps[i]*~ampRef)); },
@@ -549,7 +549,7 @@ if (~vocoderMode) {
 	~modSynth = Synth(\modulator, [\out, ~modBus], ~srcGroup);
 
 	for (0, 3, { |i|
-		~toneArray[i] = Synth(\carrierVocode, [\freq, ~baseFreq, \out, ~carrierBus[i]], ~srcGroup);
+		~toneArray[i] = Synth(\carrierVocode, [\freq, ~baseFreq, \amp, 1.0, \out, ~carrierBus[i]], ~srcGroup);
 	});
 
 	~vocoderArray = Array.newClear(4);
