@@ -25,6 +25,8 @@ There are several blocks to run in order:
 
 ~modulo2 = false;          // points along axis are taken as [...-1,0,-1,0,1,0,1,...]
 ~oneOctave = false;        // restrict frequencies to a single octave
+
+~selectedTile = -1;        // index of currently highlighted tile (-1 = none)
 )
 
 //====================================================================================================
@@ -286,6 +288,8 @@ esplicit solution given in the link above -- for this specific case.
 
 ~playTile = { arg tile, amps;
 	if (amps.isNil) { amps = [0.25, 0.25, 0.25, 0.25] };
+	~selectedTile = tile;
+	{ w.refresh }.defer;
 
 	for(0, 3, { arg i;
 		var frq;
@@ -592,7 +596,7 @@ w.view.background_(Color.white);
 
 w.drawFunc = {
     // set the Color
-	var alpha=200, clrs;
+	var clrs;
 
 
 /*
@@ -604,16 +608,16 @@ clrs = ['grey','limegreen','darkorange','grey','darkgrey','violet','deepskyblue'
  ]*/
 
 	clrs = Array.with(
-		Color.new255(161, 161, 161, alpha),
-		Color.new255(50, 205, 50, alpha),
-		Color.new255(255, 140, 0, alpha),
-		Color.new255(161, 161, 161, alpha),
-		Color.new255(122, 122, 122, alpha),
-		Color.new255(148, 0, 211, alpha),
-		Color.new255(0, 191, 255, alpha),
-		Color.new255(207, 207, 207, alpha),
-		Color.new255(178, 34, 34, alpha),
-		Color.new255(207, 207, 207, alpha)
+		Color.new255(161, 161, 161, 200),
+		Color.new255(50, 205, 50, 200),
+		Color.new255(255, 140, 0, 200),
+		Color.new255(161, 161, 161, 200),
+		Color.new255(122, 122, 122, 200),
+		Color.new255(148, 0, 211, 200),
+		Color.new255(0, 191, 255, 200),
+		Color.new255(207, 207, 207, 200),
+		Color.new255(178, 34, 34, 200),
+		Color.new255(207, 207, 207, 200)
 	);
 
 
@@ -622,12 +626,17 @@ clrs = ['grey','limegreen','darkorange','grey','darkgrey','violet','deepskyblue'
 	for (0,~verts.size-1,
 		{
 			arg i;
-			var s;
+			var s, alpha, c;
 
 			s = (sqrt(squared(~verts[i][6]-~verts[i][0])+squared(~verts[i][7]-~verts[i][1])) * sqrt(squared(~verts[i][4]-~verts[i][2])+squared(~verts[i][5]-~verts[i][3])))/2;
 			// Next line needs to be generalized, instead of hard-code s>
 			// if (s>1400, {Pen.fillColor = Color.red(0.8, 0.5);}, {Pen.fillColor = Color.cyan(0.5, 0.5);});
-			Pen.fillColor = clrs[~faces[i][0]];
+			alpha = if (~selectedTile < 0,
+				{ 200 },
+				{ if (i == ~selectedTile, { 255 }, { 80 }) }
+			);
+			c = clrs[~faces[i][0]].copy.alpha_(alpha / 255);
+			Pen.fillColor = c;
 			Pen.moveTo((~verts[i][0].asInteger)@(~verts[i][1].asInteger));
 			Pen.lineTo((~verts[i][2].asInteger)@(~verts[i][3].asInteger));
 			Pen.lineTo((~verts[i][6].asInteger)@(~verts[i][7].asInteger));
