@@ -20,8 +20,9 @@ There are several blocks to run in order:
 ~baseFreq = 261.63;        // reference frequency for unity
 ~ampRef = 0.9;             // reference amplification
 
-~constantTone = false;     // constant tone, for use with vocoder
-~vocoderMode = false;      // true = software vocoder (requires ~constantTone = true)
+~constantTone = true;     // constant tone, for use with modular and vocoder
+~vocoderMode = true;      // true = software vocoder (requires ~constantTone = true)
+~vocoderAmp = 2.0;        // carrier pre-gain; compensates for power loss through narrow BPF bands (rq=0.05 passes ~6x less energy than rq=0.3)
 
 ~modulo2 = true;          // points along axis are taken as [...-1,0,-1,0,1,0,1,...]
 ~oneOctave = false;        // restrict frequencies to a single octave
@@ -342,6 +343,17 @@ o.numOutputBusChannels.postln;
 // If the above worked, then outputs will appear in meter
 s.meter;
 
+s.scope.window.bounds_(Rect(1000,50,300,900));
+
+// To use other devices:
+ServerOptions.devices; // all devices
+ServerOptions.inDevices; // input devices
+ServerOptions.outDevices; // output devices
+
+Server.default.options.inDevice_("P-6");     // Roland P-6
+Server.default.options.outDevice_("P-6");    // for both output and input (sample rate of 44100)
+Server.default.reboot;
+
 s.quit;  // to quit the server
 
 //====================================================================================================
@@ -363,34 +375,60 @@ if (~vocoderMode) {
 // Vocoder SynthDefs — only needed when ~vocoderMode = true
 if (~vocoderMode) {
 
-	// Shared modulator — live mic input written to ~modBus
+	// Reads live mic (hardware input 0) and writes it to ~modBus so all
+	// vocoder units share a single SoundIn instance.
 	SynthDef(\modulator, {
 		arg out = 0, amp = 1.0;
 		Out.ar(out, SoundIn.ar(0) * amp);
 	}).add;
 
-	// Carrier oscillator — triangle at JI frequency, written to ~carrierBus[i]
+	// Carrier oscillator: JI-tuned triangle wave written to a per-voice ~carrierBus[i].
+	// Fold.ar clips the LFTri waveform at ±0.75, then rescales to ±1, producing
+	// a brighter, more saturated triangle with stronger upper harmonics — useful as a
+	// vocoder carrier because it spreads energy across many harmonics for the bandpass
+	// filters to sculpt.  Adjust the -/+ arguments in Fold to specify amound of folding.
 	SynthDef(\carrierVocode, {
 		arg out = 0, freq = 220, amp = 0.5;
-		Out.ar(out, LFTri.ar(freq, 0, amp));
+		var sig;
+		sig = (1.0/0.75)*Fold.ar(LFTri.ar(freq),-0.75,0.75);
+		Out.ar(out, amp * sig);
 	}).add;
 
-	// 16-band channel vocoder: analyzes mic (~modBus), imposes spectral envelope onto carrier (~carrierBus[i])
+	// Channel vocoder: imposes the spectral envelope of the modulator (speech/mic) onto
+	// one JI carrier oscillator.
+	//
+	// Signal flow per band k:
+	//   1. BPF the modulator signal → extract energy in that frequency band
+	//   2. Amplitude.ar follows the band's loudness with a fast attack (catches consonants)
+	//      and a slow release (smooths vowel transitions)
+	//   3. BPF the carrier at the same centre frequency → isolate carrier harmonics in band k
+	//   4. Multiply carrier band by the modulator envelope → transfer speech formants to carrier
+	//   5. Mix.fill sums all bands into a single output signal
+	//
+	// rq (reciprocal of Q) = 0.05 → Q ≈ 20.  Narrow bands are essential: wide bands (rq > 0.2)
+	// blend all frequency content together and the vocoder degenerates into simple AM.
+	//
+	// Frequency grid: 32 bands spaced geometrically from 100 Hz to ~8 kHz (ratio 80^(1/31) ≈ 1.16).
+	// With rq = 0.07 (Q ≈ 14), each band's -3 dB width is ~7% of its centre frequency.
+	// Adjacent bands are ~16% apart, so bands overlap slightly at their edges — good spectral
+	// tiling without the intelligibility loss of wider filters.
+	// The ~vocoderAmp carrier pre-gain and the amp argument here jointly compensate for the
+	// power loss introduced by narrow bandpass filtering.
 	SynthDef(\vocoderUnit, {
-		arg modBus = 0, carrierBus = 1, out = 0, amp = 0.1;
+		arg modBus = 0, carrierBus = 1, out = 0, amp = 1.0;
 		var mod, carrier, sig;
-		var numBands = 16;
-		var freqs = Array.geom(numBands, 100, 80 ** (1/15));  // 100 Hz to ~8000 Hz
+		var numBands = 32;
+		var freqs = Array.geom(numBands, 100, 80 ** (1/31));  // 100 Hz to ~8 kHz, 32 bands
 
 		mod     = In.ar(modBus);
 		carrier = In.ar(carrierBus);
 
 		sig = Mix.fill(numBands, { |k|
 			var modBand, carrierBand, env;
-			modBand     = BPF.ar(mod,     freqs[k], 0.3);
-			carrierBand = BPF.ar(carrier, freqs[k], 0.3);
-			env = Amplitude.ar(modBand, attackTime: 0.01, releaseTime: 0.1);
-			carrierBand * env;
+			modBand     = BPF.ar(mod,     freqs[k], 0.07);  // analyse speech spectrum
+			carrierBand = BPF.ar(carrier, freqs[k], 0.07);  // isolate matching carrier harmonics
+			env = Amplitude.ar(modBand, attackTime: 0.005, releaseTime: 0.1);  // envelope follower
+			carrierBand * env;                                                  // transfer formant
 		});
 
 		Out.ar(out, sig * amp);
@@ -414,7 +452,7 @@ SynthDef(\toneConstant, {
 /*    snd = SinOsc.ar(freq, 0, amp * 0.5) +      // Fundamental
           SinOsc.ar(freq * 2, 0, amp * 0.25) +  // 2nd harmonic
           SinOsc.ar(freq * 3, 0, amp * 0.125);  // 3rd harmonic*/
-	snd = SinOsc.ar(freq, 0, amp) ;
+	snd = SinOsc.ar(freq);
 	Out.ar(out, amp*snd);
 }).add;
 
@@ -549,7 +587,7 @@ if (~vocoderMode) {
 	~modSynth = Synth(\modulator, [\out, ~modBus], ~srcGroup);
 
 	for (0, 3, { |i|
-		~toneArray[i] = Synth(\carrierVocode, [\freq, ~baseFreq, \amp, 1.0, \out, ~carrierBus[i]], ~srcGroup);
+		~toneArray[i] = Synth(\carrierVocode, [\freq, ~baseFreq, \amp, ~vocoderAmp, \out, ~carrierBus[i]], ~srcGroup);
 	});
 
 	~vocoderArray = Array.newClear(4);
@@ -560,7 +598,7 @@ if (~vocoderMode) {
 			\modBus,     ~modBus.index,
 			\carrierBus, ~carrierBus[i].index,
 			\out,        op,
-			\amp,        0.1
+			\amp,        1.0
 		], ~vocoderGroup);
 	});
 } {
@@ -587,17 +625,12 @@ As it currently stands, the vertices are scaled to the window.  To recover the o
 vertex coordinates, it is necessary to re-read the file.
 */
 (
-
-
 w = Window.new("Penrose", Rect(600, 100, 600, 600)).front;
 w.view.background_(Color.white);
-
-
 
 w.drawFunc = {
     // set the Color
 	var clrs;
-
 
 /*
 From python code used to generate tiling
@@ -739,9 +772,7 @@ w.front;
 (
 ~button.free;
 w.close;
-)
 
-(
 if (~vocoderMode) {
 	~modSynth.free;
 	~vocoderArray.do(_.free);
