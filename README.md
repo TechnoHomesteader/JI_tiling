@@ -1,10 +1,14 @@
 # JI_tiling
 
-Projection of a five-dimensional integer lattice onto a 2D plane using the "cut and project" method, producing Penrose-like quasicrystal tilings. The lattice coordinates are interpreted as exponents of the prime harmonics 3, 5, 7, 9, 11, connecting the geometric structure of the tiling to just intonation pitch ratios. The resulting tiling is then used as a spatial score in SuperCollider.
+This work begins with projection of a five-dimensional integer lattice onto a 2D plane using the "cut and project" method, producing Penrose-like quasicrystal tilings. The lattice coordinates are then interpreted as exponents of harmonics, connecting the geometric structure of the tiling to just intonation pitch ratios. The resulting tiling is used to generate four note chords in SuperCollider; each tile is defined by four nodes, defining the chord. Different options, selected through global variables at the beginning of `tiling.scd`, allow for tones in the chord to be on continuously, have an envelope, or passed through a vocoder (with common modulation for the four tones).
+
+A particular tile may be selected using a mouse in a (SuperCollider) window. Alternatively, TouchOsc may be used to send OSC messages to SuperCollider.  Use of TouchOsc requires a setup procedure outlined in `touchosc_buttons.ipynb`. 
 
 ## Mathematical overview
 
-A 5×5 cyclic permutation matrix is diagonalized; its complex eigenvectors define two orthogonal 2D planes in R⁵. Points of the Z⁵ lattice whose perpendicular-space projections fall inside a convex hull "window" are selected and projected onto the principal plane, forming the quasicrystal tiling. Each rhombus tile vertex corresponds to a rational frequency ratio built from the primes {3, 5, 7, 9, 11}.
+A 5×5 cyclic permutation matrix is diagonalized; its complex eigenvectors define two orthogonal 2D planes in R⁵. Points of the Z⁵ lattice whose perpendicular-space projections fall inside a convex hull "window" are selected and projected onto the principal plane, forming the quasicrystal tiling. Each rhombus tile vertex corresponds to a rational frequency ratio built from the primes {3, 5, 7, 9, 11}. [Different integer sequences may be selected in `tiling.scd`.]
+
+As an aside, the notebook `hexadicDiamond.ipynb` demonstrates that Erv Wilson's Hexadic Diamond may be generated through use of this same projection to the principal plane.
 
 ## Prerequisites
 
@@ -25,11 +29,9 @@ jupyter lab
 
 ## Notebooks
 
-Recommended order:
-
 | Notebook | Description |
 |----------|-------------|
-| `notebooks/penrose5D.ipynb` | Core notebook. Builds the 5D rotation, selects lattice points via convex-hull cut window, constructs the Penrose tiling, and writes the `Data/` files consumed by SuperCollider. |
+| `notebooks/penrose5D.ipynb` | Core notebook. Builds the 5D rotation, selects lattice points via convex-hull cut window, constructs the Penrose tiling, and writes the `Data/` files used by SuperCollider. |
 | `notebooks/hexadicDiamond.ipynb` | Derives Erv Wilson's Hexadic Diamond from the same 5D projection, annotating projected points with their JI pitch ratios. |
 | `notebooks/HypercubeOnPlane.ipynb` | Symbolic derivation of the eigenvectors using SymPy; verifies the projection geometry. |
 
@@ -44,14 +46,9 @@ Recommended order:
 
 ## SuperCollider usage
 
-Open `tiling.scd` in the SuperCollider IDE. The file is organized into named blocks separated by `//===` comments:
+Open `tiling.scd` in the SuperCollider IDE.  Execute blocks as detailed at beginning of file.
 
-1. **Boot server** — evaluate the `Server.boot` block first.
-2. **Define SynthDefs** — evaluate the SynthDef block to register the instrument.
-3. **Read files** — evaluates `~dir`, `~indices`, `~verts`, `~faces` from `Data/`.
-4. **Play** — evaluate the main performance block to start the spatial tiling score.
-
-The file path is resolved automatically relative to `tiling.scd` using `thisProcess.nowExecutingPath`, so the repo can be placed anywhere on disk.
+The file is organized into named blocks separated by `//===` comments:
 
 ## Shared utilities
 
