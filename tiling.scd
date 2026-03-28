@@ -350,8 +350,8 @@ ServerOptions.devices; // all devices
 ServerOptions.inDevices; // input devices
 ServerOptions.outDevices; // output devices
 
-Server.default.options.inDevice_("P-6");     // Roland P-6
-Server.default.options.outDevice_("P-6");    // for both output and input (sample rate of 44100)
+Server.default.options.inDevice_("Scarlett 8i6 USB");     // Scarlett
+Server.default.options.outDevice_("Scarlett 8i6 USB");    // for both output and input (sample rate of 44100)
 Server.default.reboot;
 
 s.quit;  // to quit the server
@@ -389,8 +389,14 @@ if (~vocoderMode) {
 	// filters to sculpt.  Adjust the -/+ arguments in Fold to specify amound of folding.
 	SynthDef(\carrierVocode, {
 		arg out = 0, freq = 220, amp = 0.5;
-		var sig;
-		sig = (1.0/0.75)*Fold.ar(LFTri.ar(freq),-0.75,0.75);
+		var sig, fld=0.75;
+		// sig = (1.0/0.75)*Fold.ar(LFTri.ar(freq),-0.75,0.75);
+/*		sig = (1.0/0.66667)*Fold.ar(SinOsc.ar(freq),-0.66667,0.66667);*/
+		    // Create three harmonics (fundamental + 2 overtones)
+		sig =   0.6*(1.0/fld)*Fold.ar(LFTri.ar(freq),fld.neg,fld) +      // Fundamental
+		       0.25*(1.0/fld)*Fold.ar(LFTri.ar(freq*2),fld.neg,fld) +    // 2nd harmonic
+		      0.05*(1.0/fld)*Fold.ar(LFTri.ar(freq*3),fld.neg,fld) +    // 3rd harmonic
+		      0.1*(1.0/fld)*Fold.ar(LFTri.ar(freq*4),fld.neg,fld);     // 4th harmonic
 		Out.ar(out, amp * sig);
 	}).add;
 
@@ -425,8 +431,8 @@ if (~vocoderMode) {
 
 		sig = Mix.fill(numBands, { |k|
 			var modBand, carrierBand, env;
-			modBand     = BPF.ar(mod,     freqs[k], 0.07);  // analyse speech spectrum
-			carrierBand = BPF.ar(carrier, freqs[k], 0.07);  // isolate matching carrier harmonics
+			modBand     = BPF.ar(mod,     freqs[k], 0.07,3.0);  // analyse speech spectrum
+			carrierBand = BPF.ar(carrier, freqs[k], 0.07,3.0);  // isolate matching carrier harmonics
 			env = Amplitude.ar(modBand, attackTime: 0.005, releaseTime: 0.1);  // envelope follower
 			carrierBand * env;                                                  // transfer formant
 		});
@@ -782,3 +788,10 @@ if (~vocoderMode) {
 	~toneArray.do(_.free);
 };
 )
+
+
+s.record // start again
+
+s.stopRecording;
+
+thisProcess.platform.recordingsDir

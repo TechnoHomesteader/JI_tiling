@@ -1,0 +1,229 @@
+# Erv Wilson's Hexadic Diamond Derived from the A₄ Root System
+
+## Overview
+
+The notebook `hexadic_diamond_coxeter.ipynb` demonstrates that Erv Wilson's
+Hexadic Diamond — a structure from just-intonation music theory — is fully
+derivable from the Coxeter theory of the A₄ root system. Every element of the
+diamond (its points, their projection to 2D, and the connectivity of its star
+lines) emerges from a single SageMath object: `RootSystem(['A', 4]).ambient_space()`.
+
+The only external input is the assignment of odd harmonics [3, 5, 7, 9, 11] to
+the five basis vectors of the ambient space.
+
+Reference: [Erv Wilson, *The Diamond Marimba*](https://www.anaphoria.com/diamond.pdf)
+
+---
+
+## Coxeter-Theoretic Elements Used in the Notebook
+
+### 1. The A₄ Root System (`RootSystem(['A', 4])`)
+
+The root system A₄ has rank 4, with 20 roots living in a 4-dimensional
+hyperplane H = {x ∈ ℝ⁵ : Σxᵢ = 0} of 5-dimensional ambient space. The roots
+are the 20 vectors **εᵢ − εⱼ** for i ≠ j ∈ {0,1,2,3,4}, where ε₀…ε₄ are
+the standard basis vectors of ℝ⁵.
+
+The four simple roots are:
+
+    α₁ = ε₁ − ε₂,  α₂ = ε₂ − ε₃,  α₃ = ε₃ − ε₄,  α₄ = ε₄ − ε₅
+
+These are the nodes of the A₄ Dynkin diagram ○—○—○—○. Every root is an
+integer linear combination of simple roots.
+
+The Cartan matrix encodes the inner products between simple roots:
+
+    [ 2 -1  0  0]
+    [-1  2 -1  0]
+    [ 0 -1  2 -1]
+    [ 0  0 -1  2]
+
+**Role in the notebook:** The 20 roots provide the 20 combination-product
+ratios of the Hexadic Diamond (e.g., 3/5, 7/9, 11/3). Each root εᵢ − εⱼ maps
+to the musical ratio `rI[i] / rI[j]` under the harmonic assignment.
+
+### 2. The Ambient Space and Its Basis Vectors
+
+The ambient space for A₄ is ℝ⁵ with basis ε₀, …, ε₄. These basis vectors are
+the weights of the standard 5-dimensional representation of the Weyl group S₅.
+
+**Role in the notebook:** The 10 vectors ±εᵢ provide the otonal and utonal
+intervals of the diamond:
+
+- **+εᵢ** (otonal): the five harmonics {3, 5, 7, 9, 11}
+- **−εᵢ** (utonal): the five subharmonics {1/3, 1/5, 1/7, 1/9, 1/11}
+
+Together with the 20 roots and the origin (unison, 1/1), these form the 31
+points of the Hexadic Diamond.
+
+### 3. The Coxeter Element and Permutation Matrix
+
+The Coxeter element is a distinguished element of the Weyl group W(A₄) = S₅,
+defined as the product of all simple reflections taken in sequence:
+
+    cox = s₁ · s₂ · s₃ · s₄
+
+where sᵢ is the reflection swapping εᵢ ↔ εᵢ₊₁. This product is the cyclic
+permutation (1 2 3 4 5), and its matrix P in the ε-basis is the 5×5 circulant
+permutation matrix:
+
+    [0 0 0 0 1]
+    [1 0 0 0 0]
+    P = [0 1 0 0 0]
+    [0 0 1 0 0]
+    [0 0 0 1 0]
+
+P has order 5 (the Coxeter number h = 5).
+
+**Role in the notebook:** P is obtained from the same ambient space object that
+provides the roots: `ambient.weyl_group().simple_reflections()`. Its eigenstructure
+determines the projection to 2D, and its action on roots generates the star-line
+connectivity. This is the same permutation matrix used in the cut-and-project
+construction of Penrose tilings.
+
+### 4. Eigenspaces over the Cyclotomic Field Q(ζ₅)
+
+The eigenvalues of P are the fifth roots of unity ωᵏ = e^(2πik/5). Defining
+P over `CyclotomicField(5)` and calling `P.eigenspaces_right()` gives exact
+eigenspaces. The five eigenspaces decompose ℝ⁵ as:
+
+- **k = 0** (eigenvalue 1): the direction (1,1,1,1,1), orthogonal to the root
+  hyperplane H.
+- **k = 1, 4** (eigenvalues e^(±2πi/5)): real 2-plane **E∥**, where P acts as
+  rotation by 72°. This is the physical space of the Penrose tiling.
+- **k = 2, 3** (eigenvalues e^(±4πi/5)): real 2-plane **E⊥**, where P acts as
+  rotation by 144°. This is the internal space of the Penrose tiling.
+
+The notebook selects the eigenspace for eigenvalue ζ₅ = e^(2πi/5), extracts
+the eigenvector **w** over Q(ζ₅), embeds it into ℂ via `K.complex_embedding()`,
+and forms a 2×5 real projection matrix from Re(**w**) and Im(**w**). These two
+vectors are orthogonal and equal in norm, spanning E∥.
+
+**Role in the notebook:** Projection of all 31 diamond points to E∥ yields the
+2D Hexadic Diamond figure. The verification that successive basis vectors are
+separated by 2π/5 in the projected plane confirms the correct eigenspace was
+selected.
+
+### 5. The Symbolic Projection via Q(ζ₅)
+
+The projection of any lattice vector **v** = (v₀, v₁, v₂, v₃, v₄) to E∥ can
+be expressed as a single element of the cyclotomic field:
+
+    z = v₀ + v₁·ζ + v₂·ζ² + v₃·ζ³ + v₄·ζ⁴  ∈  Q(ζ₅)
+
+where Re(z) and Im(z) give the x and y coordinates. This works because the
+eigenvector of P for eigenvalue ζ₅ is proportional to (1, ζ, ζ², ζ³, ζ⁴).
+
+The notebook uses this representation for the golden ratio computation (see §7
+below), staying in exact arithmetic until numerical values are needed for
+plotting.
+
+### 6. Coxeter Orbits and Star-Line Connectivity
+
+The star lines of the Hexadic Diamond are generated by the action of the
+Coxeter element P on roots. P acts on roots by shifting both indices:
+
+    P · (εᵢ − εⱼ) = εᵢ₊₁ − εⱼ₊₁  (mod 5)
+
+Starting from a base root and applying P repeatedly generates an orbit of five
+roots. The notebook defines:
+
+```python
+def coxeter_orbit(base, n=5):
+    orbit = [np.array(base)]
+    for _ in range(n - 1):
+        orbit.append(P_np @ orbit[-1])
+    return orbit
+```
+
+The two star patterns use four Coxeter orbits:
+
+- **Red star** — outer: orbit of ε₀ − ε₂ (non-adjacent, d=2); bridge: orbit
+  of ε₁ − ε₂ (adjacent, d=1). The V-shape connects `outer[k] → bridge[k] →
+  outer[k+1]`. Each leg shares a common negative index (denominator), so the
+  red star groups ratios by shared utonal element.
+
+- **Blue star** — outer: orbit of ε₂ − ε₀ (negated d=2); bridge: orbit of
+  ε₂ − ε₁ (negated d=1). Each leg shares a common positive index (numerator),
+  so the blue star groups ratios by shared otonal element.
+
+The original notebook used a `cyclic()` function to permute coordinate lists.
+This is equivalent to repeated application of P, since cyclic permutation of
+coordinates *is* the Coxeter element acting on the ε-basis. The Coxeter orbit
+formulation makes this provenance explicit.
+
+### 7. The Golden Ratio from Cyclotomic Arithmetic
+
+The 20 roots project to two distinct distances from the origin, depending on
+cyclic distance between their indices:
+
+- **d = 1** (adjacent: εᵢ − εᵢ₊₁): projected squared norm = |1 − ζ|² =
+  (1 − ζ)(1 − ζ⁴) = 2 − ζ − ζ⁴
+- **d = 2** (non-adjacent: εᵢ − εᵢ₊₂): projected squared norm = |1 − ζ²|² =
+  (1 − ζ²)(1 − ζ³) = 2 − ζ² − ζ³
+
+The ratio of squared norms is computed entirely within Q(ζ₅):
+
+    τ² = (2 − ζ² − ζ³) / (2 − ζ − ζ⁴)
+
+which evaluates to (1 + √5)² / 4 · 4 = ((1+√5)/2)² ≈ 2.618034, confirming
+that the ratio of projected distances is the golden ratio τ = (1 + √5)/2.
+
+This is not a coincidence but a direct consequence of the eigenvalue structure:
+cos(2π/5) = (√5 − 1)/4 and cos(4π/5) = −(√5 + 1)/4 are both expressions in
+the golden ratio, and they control the projected lengths through the Coxeter
+eigenspace geometry.
+
+---
+
+## The 31 Points of the Hexadic Diamond
+
+| Count | 5D vectors | Coxeter identity | Musical meaning | Projected ring |
+|-------|-----------|-----------------|----------------|---------------|
+| 1 | (0,0,0,0,0) | zero vector | unison 1/1 | origin |
+| 5 | +εᵢ | standard rep weights | otonal: 3, 5, 7, 9, 11 | inner (r ≈ 0.447) |
+| 5 | −εᵢ | dual weights | utonal: 1/3, 1/5, 1/7, 1/9, 1/11 | inner (r ≈ 0.447) |
+| 10 | εᵢ − εᵢ₊₁ | adjacent roots (d=1) | neighbor ratios: 3/5, 5/7, … | middle (r ≈ 0.526) |
+| 10 | εᵢ − εᵢ₊₂ | non-adjacent roots (d=2) | separated ratios: 3/7, 5/9, … | outer (r ≈ 0.851) |
+
+The inner ring forms a decagon (two interleaved pentagons — otonal red, utonal
+blue, offset by 36°). The middle and outer rings each form decagons at 36°
+spacing. The outer/middle radius ratio is exactly τ.
+
+---
+
+## Relationship to Penrose Tilings
+
+The Hexadic Diamond and Penrose tilings share the same Coxeter-theoretic
+foundation:
+
+| | Penrose tiling | Hexadic Diamond |
+|---|---|---|
+| **Source** | ℤ⁵ lattice | A₄ roots + weights + origin |
+| **Selection** | geometric window in E⊥ | combinatorial (at most 1 pos, 1 neg exponent) |
+| **Projection space** | E∥ (72° eigenplane) | E∥ (same eigenplane) |
+| **Result** | infinite aperiodic tiling | finite 31-point diagram |
+| **Golden ratio appears as** | tile length ratio, inflation | outer/middle root ring ratio |
+| **Coxeter element role** | defines E∥ / E⊥ decomposition | defines projection + star orbits |
+| **Root vectors become** | tile edge directions | musical interval ratios |
+
+Both constructions begin with the same permutation matrix P (the Coxeter
+element of A₄), diagonalize it to obtain E∥, and project lattice structures
+to this plane. The Penrose tiling uses the full lattice with a geometric filter;
+the Hexadic Diamond uses a finite, algebraically natural subset of the root
+system.
+
+---
+
+## The Single External Input
+
+The only element of the construction not derived from A₄ is the harmonic
+assignment:
+
+    ε₀ → 3,  ε₁ → 5,  ε₂ → 7,  ε₃ → 9,  ε₄ → 11
+
+This maps each basis vector to an odd harmonic, so that a lattice vector
+(a, b, c, d, e) represents the ratio 3ᵃ · 5ᵇ · 7ᶜ · 9ᵈ · 11ᵉ. Everything
+else — the projection geometry, the golden ratio in the radial structure, the
+star-line connectivity, the otonal/utonal duality — follows from the Coxeter
+theory of A₄.
