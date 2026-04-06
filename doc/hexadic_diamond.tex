@@ -23,7 +23,7 @@
 \maketitle
 
 \begin{abstract}
-We show that Erv Wilson's Hexadic Diamond---a structure from just-intonation
+We document that Erv Wilson's Hexadic Diamond---a structure from just-intonation
 music theory---is fully derivable from the Coxeter theory of the $A_4$ root
 system. Every element of the diamond (its 31 points, their projection to the
 plane, and the connectivity of its star lines) emerges from a single algebraic
@@ -35,11 +35,20 @@ cut-and-project construction of Penrose tilings \cite{senechal1995,boyleSteinhar
 
 \section{Introduction}
 
-The notion that Erv Wilson's Hexadic Diamond may somehow be derived from the projection step of generating a Penrose Tiling came from regarding Figure 2.12 of Senechal. Here, a Voronoi cell -- or 5D hypercube -- is projected onto a plane orthogonal to $\{1,1,1,1,1\}$.  Though the spacing is off, this figure has all the essential elements of the Hexadic Diamond.  The projection of basis vectors in Figure 2.13 of Senechal give a further hint: the project and its reflection render the fundamental otonalities and utonalities of the Hexadic diamond.
+What follows is an esploration of some ideas set forth in the paper "D'ALESSANDRO, LIKE A HURRICANE," authored in 1989 by Erv Wilson \cite{wilson1989}. The associated repo provides code for 
+\begin{itemize}
+\item detailing the mathematical underpinnings of Wilson's hexadic diamond, and
+\item developing of Penrose Tiling with just intonation ratios assigned to nodes of the tiling. 
+\end{itemize}
+Figure 14 of \cite{wilson1989} shows the hexadic diamond, which may be developed from Coxeter Theory.  Figure 18 shows the extension to a Penrose tiling. This project serves to give examples of generating the diamond, a tiling, and the ability to `play' the tiling by means of supercollider.
+
+The notion that Erv Wilson's Hexadic Diamond may somehow be derived from the projection step of generating a Penrose Tiling came from regarding Figure 2.12 of Senechal. Here, a Voronoi cell -- or 5D hypercube -- is projected onto a plane orthogonal to $\{1,1,1,1,1\}$.    The projection of basis vectors in Figure 2.13 of Senechal give a hint: the projection and its reflection render the fundamental otonalities and utonalities of the Hexadic diamond.
 
 Taking a lattice in 5D, and considering axes to be associated with integers 3,5,7,9 and 11, respectively, a connection is made in the usual musical sense (cite Benson).  For example, the point (0,-1,1,0,0) corresponds to the ratio 7/5. Taking only the resulting ratios included in the Hexadic Diamond and projecting these points using the projection operator for the // space taken in the usual cut and project procedure for generating a Penrose Tiling gives the placement of tones present in the Hexadic Diamond -- albeit with a $90^\circ$ rotation.
 
 Inspection of the ratios that include both an otonal and utonal element, and the connection between ratios by lines in the Hexadic Diamond hint at some deeper structure.  There are 20 of these, and they correspond precisely with the $A_4$ root system. This can be seen by examining Fig. 3 of reference \cite{boyleSteinhardt2022}, which shows the The 20 $A_4$ roots, projected on the Coxeter plane. Connecting lines present in the Hexadic Diamond correspond to orbits of these roots.
+
+The "Four Hexadic Tilebursts" of Figure 41 in \cite{wilson1989} share something in common with the idea of a decagonal covering. Similar, or identical, constructions are given in Figure 5 of \cite{sasisekharan1986}. The upper right image is essentially the center decagonal region of Figure 15 in \cite{gummelt1996}. The connection to Coxeter Theory is made in \cite{Koca2017}; Figure 14 of this paper shows projections of a Voronoi cell andFigure 15 demonstrates tiling. A similar finding is shown  in Figure 3 of \cite{Koca2023}. This body of work suggests that Wilson's Tile Bursts could be used to construct a musical tiling, following the approach of \cite{sasisekharan1986}.  
 
 \includegraphics[width=0.8\textwidth]{hexadic_diamond_coxeter}
 
@@ -70,7 +79,11 @@ The Cartan matrix encoding inner products between simple roots is
 Under the harmonic assignment $\varepsilon_i \mapsto p_i$ with
 $(p_0,p_1,p_2,p_3,p_4) = (3,5,7,9,11)$, each root $\varepsilon_i - \varepsilon_j$
 maps to the just-intonation ratio $p_i / p_j$, yielding the 20 combination-product
-ratios of the Hexadic Diamond (e.g.\ $3/5$, $7/9$, $11/3$).
+ratios of the Hexadic Diamond (e.g.\ $3/5$, $7/9$, $11/3$). The full 31 point set
+follows from consideration of the unison, "1", as a 6th generator in the hexadic
+set $(1, 3, 5, 7, 9, 11)$. Ratios involving unity give the five otonal, $+\varepsilon_{i}$, and
+five utonal, $-\varepsilon_{i}$, points. Finally, there is unity , $1/1$, giving a total of 31 points.
+
 
 \section{The Coxeter Element and Projection}
 
@@ -222,10 +235,37 @@ E.~Wilson,
 Xenharmonikon, 1965.
 Available at \url{https://www.anaphoria.com/diamond.pdf}.
 
+\bibitem{wilson1989}
+E.~Wilson,
+\textit{D'Allesandro, Like a Huricane}, 1989.
+Available at \url{https://www.anaphoria.com/dal.pdf}.
+
 \bibitem{senechal1995}
 M.~Senechal,
 \textit{Quasicrystals and Geometry},
 Cambridge University Press, 1995.
+
+\bibitem{sasisekharan1986}
+V.~Sasisekharan,
+\textit{A new method for generation of quasi-periodic structures with n fold axes: Application to five and seven folds},
+Pramana - J . Phys., \textbf{26}, L283-L293, (1986).
+
+
+\bibitem{gummelt1996}
+P.~Gummelt,
+\textit{Penrose Tilings as Coverings of Congruent Decagons},
+Geometriae Dedicata \textbf{62}, 1-17 (1996).
+
+\bibitem{Koca2023}
+N.~Koca,
+\textit{Penrose-like tilings from projection of affine A4 to affine H2},
+Journal of Physics: Conference Series \textbf{2461}, 012008 (2023).
+
+
+\bibitem{Koca2017}
+M.~Koca, N.~O.~Koca and A.~Al-Siyabi,
+\textit{SU(5) Grand Unified Theory, Its Polytopes and 5-Fold Symmetric Aperiodic Tiling},
+Int.J.Geom.Meth.Mod.Phys. \textbf{15} 1850056 (2017), 
 
 
 \bibitem{boyleSteinhardt2022}
@@ -233,9 +273,6 @@ L.~Boyle and P.~J.~Steinhardt,
 \textit{Coxeter pairs, Ammann patterns, and Penrose-like tilings},
 Phys.\ Rev.\ B \textbf{106}, 144113 (2022).
 \href{https://doi.org/10.1103/PhysRevB.106.144113}{doi:10.1103/PhysRevB.106.144113}.
-
-
-
 
 \bibitem{humphreys1990}
 J.~E.~Humphreys,

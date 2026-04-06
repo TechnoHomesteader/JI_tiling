@@ -3,3 +3,9 @@ __pycache__/
 .ipynb_checkpoints/
 anaconda_projects/
 backup/
+dal.pdf
+
+# LaTeX build artifacts
+doc/*.aux
+doc/*.log
+doc/*.synctex.gz
