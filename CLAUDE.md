@@ -28,7 +28,7 @@ jupyter lab
 
 - **`ji_tiling.py`** (repo root) — shared utilities imported by all notebooks via `sys.path.insert(0, '..')`.
 - **`notebooks/`** — Jupyter notebooks that must be run from the `notebooks/` directory or via JupyterLab at repo root. Paths to `Data/` use `'../Data/'`.
-
+- when modifying notebooks, create a new cell instead of modifying, unless explicitly directed.  Once code is debugged, cells that are replaced by new code will be deleted manually.
 Key functions in `ji_tiling.py`:
 - `basis2D(eigenVectors, k, l)` — builds the (2×5) projection matrix from eigenvector pair k, l of the 5D cyclic permutation matrix
 - `in_hull(p, hull)` — convex-hull membership test (wraps `scipy.spatial.Delaunay`)
@@ -37,17 +37,7 @@ Key functions in `ji_tiling.py`:
 
 ### SuperCollider layer (`tiling.scd`)
 
-The file is organized into named blocks separated by `//===` dividers, meant to be evaluated sequentially in the SuperCollider IDE (Cmd+Return per block):
-
-1. **Options** — `~constantTone`, `~modulo2`, `~oneOctave` flags
-2. **Server boot** — `s.boot`, output channel config, `FreqScope`
-3. **Read data** — loads `Data/` CSVs; `~lattice_limit` and `~lattice_scale` normalize vertices to window coordinates (destructively — re-read files to get original coordinates)
-4. **Frequency/JI** — `~latticeParameters` (7 preset interval sets), `~freqScale`, `~singleOctave`
-5. **Tile geometry** — `~inside_convex_polygon` (cross-product point-in-polygon), `~ampScale` (bilinear shape-function interpolation via Newton step)
-6. **SynthDefs** — `\tone`, `\toneConstant`, `\pluck`, `\harmonicSynth`, `\triangle`, `\triangleConstant`
-7. **Constant synths** — `~toneArray` startup (only used when `~constantTone = true`)
-8. **Window/performance** — draws tiling, handles mouse click (selects tile, computes 4 JI pitches, triggers synths), UI button to cycle through interval sets
-9. **Cleanup** — `w.close`, free `~toneArray`
+The file is organized into named blocks separated by `//===` dividers, meant to be evaluated sequentially in the SuperCollider IDE (Cmd+Return per block).
 
 **Key SuperCollider globals:**
 - `~baseFreq` — reference frequency in Hz (default 261.63)
