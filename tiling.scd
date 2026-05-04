@@ -163,6 +163,22 @@ in the button (used to select different lattice parameter choices).
 ~currentInterval = 0;
 ~intervals = ~latticeIntervals[~currentInterval];  // Initialize with 1st set of lattice parameters
 
+~controlState = (
+	shiftMode: \direct,
+	glideTime: 0.5,
+	collectionSpan: 4,
+	foldAmount: if (~vocoderMode, { 0.75 }, { 0.9 }),
+	outboundOscEnabled: false,
+	outboundOscHost: "127.0.0.1",
+	outboundOscPort: 9000,
+	outboundMidiEnabled: false,
+	voiceTrackingEnabled: false,
+	voiceHarmonizeEnabled: false,
+	pitchSource: \tile
+);
+
+~outboundOsc = NetAddr(~controlState[\outboundOscHost], ~controlState[\outboundOscPort]);
+
 // IDENTIFY TILE
 /*
 Identify the tile, and set relative amplitudes based on position selected within the tile
@@ -287,27 +303,152 @@ esplicit solution given in the link above -- for this specific case.
 	[ ((1-s)*(1-t))/4, ((1+s)*(1-t))/4, ((1+s)*(1+t))/4, ((1-s)*(1+t))/4 ];
 };
 
-~playTile = { arg tile, amps;
+~tileVertices = { arg tile;
+	[
+		[~verts[tile][0], ~verts[tile][1]],
+		[~verts[tile][2], ~verts[tile][3]],
+		[~verts[tile][6], ~verts[tile][7]],
+		[~verts[tile][4], ~verts[tile][5]]
+	]
+};
+
+~tileCenter = { arg vertices;
+	var x = 0.0, y = 0.0;
+
+	vertices.do { arg v;
+		x = x + v[0];
+		y = y + v[1];
+	};
+
+	[x / vertices.size, y / vertices.size]
+};
+
+~tileRatios = { arg tile;
+	Array.fill(4, { arg i;
+		var ratio;
+		ratio = ~freqScale.value(tile, i);
+		if (~oneOctave, { ratio = ~singleOctave.value(ratio) });
+		ratio;
+	})
+};
+
+~tileData = { arg tile, amps;
+	var vertices, ratios, frequencies;
+
 	if (amps.isNil) { amps = [0.25, 0.25, 0.25, 0.25] };
-	~selectedTile = tile;
-	{ w.refresh }.defer;
+	vertices = ~tileVertices.value(tile);
+	ratios = ~tileRatios.value(tile);
+	frequencies = ratios.collect { arg ratio; ~baseFreq * ratio };
+
+	(
+		tile: tile,
+		face: ~faces[tile][0],
+		amps: amps,
+		vertices: vertices,
+		center: ~tileCenter.value(vertices),
+		ratios: ratios,
+		frequencies: frequencies
+	)
+};
+
+~resolvePitchCollection = { arg tileData;
+	var collection;
+
+	collection = tileData.copy;
+	collection.putAll((
+		shiftMode: ~controlState[\shiftMode],
+		glideTime: ~controlState[\glideTime],
+		collectionSpan: ~controlState[\collectionSpan]
+	));
+	collection;
+};
+
+~applyToneControls = {
+	if (~toneArray.notNil) {
+		~toneArray.do { arg synth;
+			if (synth.notNil) {
+				synth.set(\lag, ~controlState[\glideTime], \fld, ~controlState[\foldAmount]);
+			};
+		};
+	};
+};
+
+~setGlideTime = { arg seconds;
+	~controlState[\glideTime] = seconds.max(0.0);
+	~applyToneControls.value;
+};
+
+~setFoldAmount = { arg amount;
+	~controlState[\foldAmount] = amount.clip(0.01, 1.0);
+	~applyToneControls.value;
+};
+
+~setShiftMode = { arg mode;
+	~controlState[\shiftMode] = mode.asString.asSymbol;
+};
+
+~setCollectionSpan = { arg span;
+	~controlState[\collectionSpan] = span.asInteger.max(1);
+};
+
+~sendOutboundOsc = { arg path, values;
+	~outboundOsc.performList(\sendMsg, [path] ++ values);
+};
+
+~performTile = { arg collection;
+	var amps, frequencies;
+
+	amps = collection[\amps];
+	frequencies = collection[\frequencies];
 
 	for(0, 3, { arg i;
 		var frq;
-		frq = ~freqScale.value(tile, i);
-		if (~oneOctave, { frq = ~singleOctave.value(frq) });
-		frq = ~baseFreq * frq;
+		frq = frequencies[i];
 
 		if (~vocoderMode) {
-			~toneArray[i].set(\freq, frq);
+			~toneArray[i].set(\freq, frq, \lag, collection[\glideTime], \fld, ~controlState[\foldAmount]);
 			~vocoderArray[i].set(\amp, sqrt(amps[i] * ~ampRef));
 		} {
 			if (~constantTone,
-				{ ~toneArray[i].set(\freq, frq, \amp, sqrt(amps[i]*~ampRef)); },
+				{ ~toneArray[i].set(\freq, frq, \amp, sqrt(amps[i]*~ampRef), \lag, collection[\glideTime], \fld, ~controlState[\foldAmount]); },
 				{ Synth(\triangle, ["freq", frq, "out", i%o.numOutputBusChannels, "amp", amps[i]*~ampRef]); }
 			);
 		};
 	});
+};
+
+~publishTileState = { arg collection;
+	if (~controlState[\outboundOscEnabled]) {
+		~sendOutboundOsc.value('/tile/selected', [collection[\tile], collection[\face]]);
+		~sendOutboundOsc.value('/tile/position', [collection[\tile], collection[\center][0], collection[\center][1]]);
+		~sendOutboundOsc.value('/tile/vertices', [collection[\tile]] ++ collection[\vertices].flat);
+		~sendOutboundOsc.value('/collection/ratios', [collection[\tile]] ++ collection[\ratios]);
+		~sendOutboundOsc.value('/collection/frequencies', [collection[\tile]] ++ collection[\frequencies]);
+		~sendOutboundOsc.value('/state/control', [
+			collection[\tile],
+			collection[\shiftMode].asString,
+			collection[\glideTime],
+			collection[\collectionSpan],
+			~controlState[\foldAmount]
+		]);
+	};
+};
+
+~playTile = { arg tile, amps;
+	var data, collection;
+
+	if ((tile < 0) or: { tile >= ~verts.size }) {
+		("Ignoring invalid tile: " ++ tile).postln;
+	} {
+		data = ~tileData.value(tile, amps);
+		collection = ~resolvePitchCollection.value(data);
+
+		~selectedTile = tile;
+		if (w.notNil) { { w.refresh }.defer };
+
+		~performTile.value(collection);
+		~publishTileState.value(collection);
+	};
 };
 )
 
@@ -490,32 +631,85 @@ SynthDef(\triangle, {
 	},
 	'/Tile');
 
+~tileSelect = OSCFunc(
+	{
+		arg msg, time, addr, recvPort;
+		var tile;
+
+		tile = msg[1].asInteger;
+
+		~playTile.value(tile, nil);
+	},
+	'/tile/select');
+
 ~lagSlider = OSCFunc(
 	{
 		arg msg, time, addr, recvPort;
-		var lg;
 
-		lg = 8*msg[1];
-		~toneArray.do(_.set(\lag, lg));
+		~setGlideTime.value(8 * msg[1]);
 	},
 	'/lag');
 
 ~foldSlider = OSCFunc(
 	{
 		arg msg, time, addr, recvPort;
-		var fl;
 
-		fl = 0.5+(0.5*msg[1]);
-		~toneArray.do(_.set(\fld, fl));
+		~setFoldAmount.value(0.5 + (0.5 * msg[1]));
 	},
 	'/fold');
+
+~glideTimeControl = OSCFunc(
+	{
+		arg msg, time, addr, recvPort;
+
+		~setGlideTime.value(msg[1]);
+	},
+	'/control/glideTime');
+
+~foldAmountControl = OSCFunc(
+	{
+		arg msg, time, addr, recvPort;
+
+		~setFoldAmount.value(msg[1]);
+	},
+	'/control/foldAmount');
+
+~shiftModeControl = OSCFunc(
+	{
+		arg msg, time, addr, recvPort;
+
+		~setShiftMode.value(msg[1]);
+	},
+	'/control/shiftMode');
+
+~collectionSpanControl = OSCFunc(
+	{
+		arg msg, time, addr, recvPort;
+
+		~setCollectionSpan.value(msg[1]);
+	},
+	'/control/collectionSpan');
+
+~outboundOscToggle = OSCFunc(
+	{
+		arg msg, time, addr, recvPort;
+
+		~controlState[\outboundOscEnabled] = msg[1].asInteger != 0;
+	},
+	'/control/outboundOsc');
 )
 
 // Free the OSC function
 (
 ~tileTones.free;
+~tileSelect.free;
 ~lagSlider.free;
 ~foldSlider.free;
+~glideTimeControl.free;
+~foldAmountControl.free;
+~shiftModeControl.free;
+~collectionSpanControl.free;
+~outboundOscToggle.free;
 )
 // Some code for debugging the OSC connection
 
@@ -562,7 +756,13 @@ if (~vocoderMode) {
 	~modSynth = Synth(\modulator, [\out, ~modBus], ~srcGroup);
 
 	for (0, 3, { |i|
-		~toneArray[i] = Synth(\carrierVocode, [\freq, ~baseFreq, \amp, ~vocoderAmp, \out, ~carrierBus[i]], ~srcGroup);
+		~toneArray[i] = Synth(\carrierVocode, [
+			\freq, ~baseFreq,
+			\amp, ~vocoderAmp,
+			\out, ~carrierBus[i],
+			\lag, ~controlState[\glideTime],
+			\fld, ~controlState[\foldAmount]
+		], ~srcGroup);
 	});
 
 	~vocoderArray = Array.newClear(4);
@@ -585,8 +785,13 @@ if (~vocoderMode) {
 		if (o.numOutputBusChannels>2,{op=i;ap=0.1},{op=i%2;ap=0.15});
 		if (~constantTone,
 			{
-				~toneArray[i] = Synth.new(\toneConstant, ["freq", ~baseFreq, "out", op, "amp", ap ]);
-				~toneArray[i].set(\lag, 0.5);
+				~toneArray[i] = Synth.new(\toneConstant, [
+					"freq", ~baseFreq,
+					"out", op,
+					"amp", ap,
+					"lag", ~controlState[\glideTime],
+					"fld", ~controlState[\foldAmount]
+				]);
 			}
 		);
 	});
@@ -759,7 +964,7 @@ if (~vocoderMode) {
 };
 )
 
-~toneArray.do(_.set(\fld, 0.8))
+~setFoldAmount.value(0.8)
 
 s.record // start again
 
